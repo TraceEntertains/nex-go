@@ -138,6 +138,11 @@ func (pep *PRUDPEndPoint) processPacket(packet PRUDPPacketInterface, socket *Soc
 		connection.StreamType = streamType
 		connection.StreamID = streamID
 		connection.StreamSettings = pep.DefaultStreamSettings.Copy()
+
+		if pep.Server.CaptureRawRMC {
+			connection.rawRMCWriter = NewRawRMCWriter(connection, pep.Server.RawRMCTitleID)
+		}
+
 		return connection
 	})
 
@@ -398,6 +403,10 @@ func (pep *PRUDPEndPoint) handleConnect(packet PRUDPPacketInterface) {
 		ack.SetPayload(encryptedPayload)
 	}
 
+	if pep.Server.CaptureRawRMC && connection.rawRMCWriter != nil {
+		connection.rawRMCWriter.PrepareWriting()
+	}
+
 	ack.SetSignature(ack.CalculateSignature([]byte{}, packet.GetConnectionSignature()))
 
 	connection.ConnectionState = StateConnected
@@ -604,6 +613,10 @@ func (pep *PRUDPEndPoint) HandleReliable(packet PRUDPPacketInterface) {
 				}
 
 				nextPacket.SetRMCMessage(message)
+				if connection.endpoint.Server.CaptureRawRMC && connection.rawRMCWriter != nil {
+					connection.rawRMCWriter.CaptureRMCData(nextPacket, false)
+				}
+
 				connection.ClearOutgoingBuffer(substreamID)
 
 				pep.Emit("data", nextPacket)
@@ -616,12 +629,14 @@ func (pep *PRUDPEndPoint) HandleReliable(packet PRUDPPacketInterface) {
 
 // HandleUnreliable handles unreliable PRUDP DATA packets.
 func (pep *PRUDPEndPoint) HandleUnreliable(packet PRUDPPacketInterface) {
+	connection := packet.Sender().(*PRUDPConnection)
+
 	if packet.HasFlag(constants.PacketFlagNeedsAck) {
 		pep.AcknowledgePacket(packet)
 	}
 
 	// * Since unreliable DATA packets can in theory reach the
-	// * server in any order, and they lack a subsslidingWindowtream, it's
+	// * server in any order, and they lack a substream, it's
 	// * not actually possible to know what order they should
 	// * be processed in for each request. So assume all packets
 	// * MUST be fragment 0 (unreliable packets do not have frags)
@@ -672,6 +687,9 @@ func (pep *PRUDPEndPoint) HandleUnreliable(packet PRUDPPacketInterface) {
 	}
 
 	packet.SetRMCMessage(message)
+	if connection.endpoint.Server.CaptureRawRMC && connection.rawRMCWriter != nil {
+		connection.rawRMCWriter.CaptureRMCData(packet, false)
+	}
 
 	pep.Emit("data", packet)
 }
