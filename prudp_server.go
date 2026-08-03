@@ -62,6 +62,8 @@ type PRUDPServer struct {
 	PRUDPV0Settings               *PRUDPV0Settings
 	PRUDPV1Settings               *PRUDPV1Settings
 	UseVerboseRMC                 bool
+	CaptureRawRMC                 bool
+	RawRMCTitleID                 uint64
 }
 
 // EnableMetrics enables the net/http/pprof server at the specified address.
@@ -127,6 +129,14 @@ func (ps *PRUDPServer) BindPRUDPEndPoint(endpoint *PRUDPEndPoint) {
 	if ps.Endpoints.Has(endpoint.StreamID) {
 		logger.Warningf("Tried to bind already existing PRUDPEndPoint %d", endpoint.StreamID)
 		return
+	}
+
+	if ps.CaptureRawRMC {
+		endpoint.OnConnectionEnded(func(connection *PRUDPConnection) {
+			if connection.rawRMCWriter != nil {
+				connection.rawRMCWriter.CloseWriting()
+			}
+		})
 	}
 
 	endpoint.Server = ps
@@ -299,6 +309,11 @@ func (ps *PRUDPServer) processPacket(packet PRUDPPacketInterface, address net.Ad
 // Send sends the packet to the packets sender
 func (ps *PRUDPServer) Send(packet PacketInterface) {
 	if packet, ok := packet.(PRUDPPacketInterface); ok {
+		connection := packet.Sender().(*PRUDPConnection)
+		if ps.CaptureRawRMC && connection.rawRMCWriter != nil && packet.Type() == constants.DataPacket {
+			connection.rawRMCWriter.CaptureRMCData(packet, true)
+		}
+
 		data := packet.Payload()
 		fragments := int(len(data) / ps.FragmentSize)
 

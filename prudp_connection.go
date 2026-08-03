@@ -40,6 +40,7 @@ type PRUDPConnection struct {
 	pingKickTimer                       *time.Timer
 	StationURLs                         types.List[types.StationURL]
 	mutex                               *sync.Mutex
+	rawRMCWriter                        *RawRMCWriter
 }
 
 // Endpoint returns the PRUDP endpoint the connections socket is connected to
