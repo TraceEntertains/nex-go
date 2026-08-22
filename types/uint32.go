@@ -69,8 +69,15 @@ func (u32 *UInt32) Scan(value any) error {
 	switch v := value.(type) {
 	case int64:
 		*u32 = UInt32(v)
-	case string:
-		parsed, err := strconv.ParseUint(v, 10, 32)
+	case []byte, string:
+		var str string
+		if b, ok := v.([]byte); ok {
+			str = string(b)
+		} else {
+			str = v.(string)
+		}
+
+		parsed, err := strconv.ParseUint(str, 10, 32)
 		if err != nil {
 			return fmt.Errorf("cannot parse string %q into UInt32: %w", v, err)
 		}

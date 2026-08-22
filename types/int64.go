@@ -69,8 +69,15 @@ func (i64 *Int64) Scan(value any) error {
 	switch v := value.(type) {
 	case int64:
 		*i64 = Int64(v)
-	case string:
-		parsed, err := strconv.ParseInt(v, 10, 64)
+	case []byte, string:
+		var str string
+		if b, ok := v.([]byte); ok {
+			str = string(b)
+		} else {
+			str = v.(string)
+		}
+
+		parsed, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {
 			return fmt.Errorf("cannot parse string %q into Int64: %w", v, err)
 		}
